@@ -68,7 +68,8 @@ String getHeaderValue(String header, String headerName)
     return header.substring(strlen(headerName.c_str()));
 }
 
-void onProgress(size_t written, size_t total) {
+void onProgress(size_t written, size_t total)
+{
     Serial.println("Written: " + String(written) + " / " + String(total));
 }
 
@@ -170,15 +171,26 @@ void update(String host, String updateUrl)
     {
         // Open the file from the SD card to write
         File updateBinary = SD.open("/update.bin", FILE_WRITE);
-        if(!updateBinary){
+        if (!updateBinary)
+        {
             return;
         }
 
         Serial.println("Begin writing to SD card");
-    
-        while(client.available() > 0) {
-            updateBinary.write(client.read());
-            // Serial.println("Wrote: " + String(updateBinary.size()) + " of: " + contentLength);
+
+        size_t written = 0;
+
+        while (written < contentLength)
+        {
+            if (client.available())
+            {
+                updateBinary.write(client.read());
+                if (written % 100 == 0)
+                {
+                    Serial.println("Wrote: " + String(written) + " of: " + contentLength);
+                }
+                written++;
+            }
         }
 
         updateBinary.close();
@@ -197,7 +209,8 @@ void update(String host, String updateUrl)
             // No activity would appear on the Serial monitor
             // So be patient. This may take 2 - 5mins to complete
             File updateBinary = SD.open("/update.bin", FILE_READ);
-            if(!updateBinary){
+            if (!updateBinary)
+            {
                 return;
             }
             size_t written = Update.writeStream(updateBinary);
