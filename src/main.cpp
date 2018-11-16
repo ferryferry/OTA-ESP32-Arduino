@@ -7,7 +7,7 @@
 #include <SD.h>
 
 #define FIRMWARE_VERSION 0.1
-#define LED 21
+#define LED 5
 
 const char *ssid = "Ferry’s iPhone";
 const char *password = "Jongmans1";
@@ -168,6 +168,24 @@ void update(String host, String updateUrl)
     // check contentLength and content type
     if (contentLength && isValidContentType)
     {
+        // Open the file from the SD card to write
+        File updateBinary = SD.open("/update.bin", FILE_WRITE);
+        if(!updateBinary){
+            return;
+        }
+
+        Serial.println("Begin writing to SD card");
+    
+        while(client.available() > 0) {
+            updateBinary.write(client.read());
+            // Serial.println("Wrote: " + String(updateBinary.size()) + " of: " + contentLength);
+        }
+
+        updateBinary.close();
+
+        Serial.println("Write completed");
+        //updateBinary.write((uint8_t)client.read(), (size_t)contentLength);
+
         Update.onProgress(onProgress);
         // Check if there is enough to OTA Update
         bool canBegin = Update.begin(contentLength);
@@ -178,7 +196,11 @@ void update(String host, String updateUrl)
             Serial.println("Begin OTA. This may take 2 - 5 mins to complete. Things might be quite for a while.. Patience!");
             // No activity would appear on the Serial monitor
             // So be patient. This may take 2 - 5mins to complete
-            size_t written = Update.writeStream(client);
+            File updateBinary = SD.open("/update.bin", FILE_READ);
+            if(!updateBinary){
+                return;
+            }
+            size_t written = Update.writeStream(updateBinary);
 
             if (written == contentLength)
             {
@@ -193,6 +215,11 @@ void update(String host, String updateUrl)
 
             if (Update.end())
             {
+                // Close the filestream
+                updateBinary.close();
+                // Remove the update file
+                SD.remove("/update.bin");
+
                 Serial.println("OTA done!");
                 if (Update.isFinished())
                 {
@@ -228,9 +255,6 @@ void update(String host, String updateUrl)
 void loop()
 {
     digitalWrite(LED, HIGH);
-    delay(1000);
-    digitalWrite(LED, LOW);
-    delay(1000);
 
     String updateUrl = checkNewVersion();
     if (updateUrl != "")
@@ -242,5 +266,6 @@ void loop()
         update("http://i343410.hera.fhict.nl", updateUrl);
     }
 
+    digitalWrite(LED, LOW);
     delay(1000);
 }
