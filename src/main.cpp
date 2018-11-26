@@ -6,8 +6,9 @@
 #include <SPI.h>
 #include <SD.h>
 
-#define FIRMWARE_VERSION 0.1
+#define FIRMWARE_VERSION 0.00
 #define LED 5
+#define API_BASE_URL "http://172.20.10.4"
 
 const char *ssid = "Ferry’s iPhone";
 const char *password = "Jongmans1";
@@ -43,20 +44,16 @@ String checkNewVersion()
     }
 
     HTTPClient http;
-    http.begin("http://i343410.hera.fhict.nl/version.json"); //Specify destination for HTTP request
+    http.begin(String(API_BASE_URL) + ":5000/updates/check?currentVersion=" + FIRMWARE_VERSION); //Specify destination for HTTP request
+    http.addHeader("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjQ4LUxITERQVS1EV1FaRFdFNzM2S1U0LUhOU09WR0RDVVlYNF9YSlEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJmMmFiMGE1Ny1kODM0LTQyOWQtYTUzOC04ZDZmNjRmMTA3MjIiLCJuYW1lIjoiVGVzdCBCaWtlIChBcHApIDMiLCJ0b2tlbl91c2FnZSI6ImFjY2Vzc190b2tlbiIsImp0aSI6IjBiMDAyOTk3LTg3ZjEtNGVhNS05NDYyLTc4MDI3NGRkNDY2YSIsImNmZF9sdmwiOiJwcml2YXRlIiwiYXVkIjoicmVzb3VyY2Vfc2VydmVyIiwiYXpwIjoiZjJhYjBhNTctZDgzNC00MjlkLWE1MzgtOGQ2ZjY0ZjEwNzIyIiwibmJmIjoxNTQzMjQyMDY5LCJleHAiOjE1NDMyNDU2NjksImlhdCI6MTU0MzI0MjA2OSwiaXNzIjoiaHR0cDovLzE3Mi4yMC4xMC40OjUwMDAvIn0.4eUZWeEgeVrx9h5e0zWP2bNhHDFAFeDkvta9zOOnfWm-uUBOxzK7ea1hYbA8ZfEDIm_ne_HRyk7AorZCSsqXN_hL1-NGlq5CDlMvPQy7LNSFbGNT0B8eX8foxW1k5GqJSX41_0qkuDbvBlcrGex_Jrngo5Yhib5Os9cdSUHktVueaFrSN_H5JUeZZcJjmYUsNgR7HTM3q-1Z5HhFd3L85TSgZV63jo8L8WtFOATpQOI2Fg1dAGh6OMFB-IdQyN9QZd4ZZ0bzF6KEBLJZWm-hI-X7Xreh0xx2yfqSccxSHVNgnl7qkA9gHqLlS0Vy9pexTWbGH0esisNfw1n8n47_Qw");
+    http.addHeader("Content-Type", "application/json");
     String firmwareDownloadUrl = "";
 
-    if (http.GET() > 0)
+    int response = http.sendRequest("PUT", "0");
+    
+    if (response > 0)
     {
-        String json = http.getString(); //Get the response to the request
-        StaticJsonBuffer<300> JsonBuffer;
-        JsonObject &root = JsonBuffer.parseObject(json);
-        double version = root["version"];
-        if (version > FIRMWARE_VERSION)
-        {
-            String jsonUrl = root["file"];
-            firmwareDownloadUrl = jsonUrl;
-        }
+        firmwareDownloadUrl = String(API_BASE_URL) + ":5000" + http.getString();
     }
 
     http.end();
@@ -80,16 +77,18 @@ void update(String host, String updateUrl)
     bool isValidContentType = false;
 
     Serial.println("Connecting to: " + String(host));
+    Serial.println("URL: " + updateUrl);
     // Connect to S3
-    if (client.connect(host.c_str(), 80))
+    IPAddress address(172,20,10,4);
+    if (client.connect(address, 5000))
     {
         // Connection Succeed.
         // Fecthing the bin
         Serial.println("Fetching Bin: " + String(updateUrl));
 
         // Get the contents of the bin file
-        client.print(String("GET ") + updateUrl + " HTTP/1.1\r\n" +
-                     "Host: " + updateUrl + "\r\n" +
+        client.print(String("GET ") + "/updates/version?version=0.01" + " HTTP/1.1\r\n" +
+                     "Host: " + "172.20.10.4" + "\r\n" +
                      "Cache-Control: no-cache\r\n" +
                      "Connection: close\r\n\r\n");
 
@@ -110,6 +109,7 @@ void update(String host, String updateUrl)
             String line = client.readStringUntil('\n');
             // remove space, to check if the line is end of headers
             line.trim();
+            Serial.println(line);
 
             // if the the line is empty,
             // this is end of headers
@@ -276,9 +276,9 @@ void loop()
         Serial.println(updateUrl);
 
         Serial.println("Calling update method");
-        update("http://i343410.hera.fhict.nl", updateUrl);
+        update(API_BASE_URL, updateUrl);
     }
 
     digitalWrite(LED, LOW);
-    delay(1000);
+    delay(10000);
 }
