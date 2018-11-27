@@ -8,7 +8,9 @@
 
 #define FIRMWARE_VERSION 0.00
 #define LED 5
+#define API_IP "172.20.10.4"
 #define API_BASE_URL "http://172.20.10.4"
+#define TOKEN_ENDPOINT "http://172.20.10.4:5000/connect/token"
 
 const char *ssid = "Ferry’s iPhone";
 const char *password = "Jongmans1";
@@ -36,6 +38,50 @@ void setup()
     Serial.println("Connected to the WiFi network");
 }
 
+String getAccessToken(String tokenEndpoint, String clientId, String clientSecret, const char *certificate)
+{
+    if (WiFi.status() == WL_CONNECTED) //Check WiFi connection status
+    {
+        HTTPClient http;
+        http.begin(tokenEndpoint);                              //Specify destination for HTTP request
+        http.addHeader("Content-Type", "application/x-www-form-urlencoded"); //Specify content-type header
+
+        int httpResponseCode = http.POST("grant_type=client_credentials&client_id=" + clientId + "&client_secret=" + clientSecret); //Send the actual POST request
+
+        if (httpResponseCode == 200)
+        {
+            DynamicJsonBuffer jsonBuffer;
+            JsonObject &root = jsonBuffer.parseObject(http.getString());
+
+            if (!root.success())
+            {
+                Serial.println(F("Parsing failed!"));
+                return "";
+            }
+
+            return root["access_token"];
+        }
+        else if (httpResponseCode > 0)
+        {
+            String response = http.getString(); //Get the response to the request
+
+            Serial.println(httpResponseCode); //Print return code
+            Serial.println(response);         //Print request answer
+        }
+        else
+        {
+            Serial.print("Error on sending POST: ");
+            Serial.println(httpResponseCode);
+        }
+
+        http.end(); //Free resources
+    }
+    else
+    {
+        Serial.println("Error in WiFi connection");
+    }
+}
+
 String checkNewVersion()
 {
     if (WiFi.status() != WL_CONNECTED) //Check WiFi connection status
@@ -43,14 +89,16 @@ String checkNewVersion()
         return "";
     }
 
+    String token = getAccessToken(TOKEN_ENDPOINT, "f2ab0a57-d834-429d-a538-8d6f64f10722", "f72baeae-a836-425e-88d5-99275dc4aa46", "");
+    Serial.println(token);
+
     HTTPClient http;
     http.begin(String(API_BASE_URL) + ":5000/updates/check?currentVersion=" + FIRMWARE_VERSION); //Specify destination for HTTP request
-    http.addHeader("Authorization", "Bearer eyJhbGciOiJSUzI1NiIsImtpZCI6IjQ4LUxITERQVS1EV1FaRFdFNzM2S1U0LUhOU09WR0RDVVlYNF9YSlEiLCJ0eXAiOiJKV1QifQ.eyJzdWIiOiJmMmFiMGE1Ny1kODM0LTQyOWQtYTUzOC04ZDZmNjRmMTA3MjIiLCJuYW1lIjoiVGVzdCBCaWtlIChBcHApIDMiLCJ0b2tlbl91c2FnZSI6ImFjY2Vzc190b2tlbiIsImp0aSI6IjBiMDAyOTk3LTg3ZjEtNGVhNS05NDYyLTc4MDI3NGRkNDY2YSIsImNmZF9sdmwiOiJwcml2YXRlIiwiYXVkIjoicmVzb3VyY2Vfc2VydmVyIiwiYXpwIjoiZjJhYjBhNTctZDgzNC00MjlkLWE1MzgtOGQ2ZjY0ZjEwNzIyIiwibmJmIjoxNTQzMjQyMDY5LCJleHAiOjE1NDMyNDU2NjksImlhdCI6MTU0MzI0MjA2OSwiaXNzIjoiaHR0cDovLzE3Mi4yMC4xMC40OjUwMDAvIn0.4eUZWeEgeVrx9h5e0zWP2bNhHDFAFeDkvta9zOOnfWm-uUBOxzK7ea1hYbA8ZfEDIm_ne_HRyk7AorZCSsqXN_hL1-NGlq5CDlMvPQy7LNSFbGNT0B8eX8foxW1k5GqJSX41_0qkuDbvBlcrGex_Jrngo5Yhib5Os9cdSUHktVueaFrSN_H5JUeZZcJjmYUsNgR7HTM3q-1Z5HhFd3L85TSgZV63jo8L8WtFOATpQOI2Fg1dAGh6OMFB-IdQyN9QZd4ZZ0bzF6KEBLJZWm-hI-X7Xreh0xx2yfqSccxSHVNgnl7qkA9gHqLlS0Vy9pexTWbGH0esisNfw1n8n47_Qw");
+    http.addHeader("Authorization", "Bearer " + token);
     http.addHeader("Content-Type", "application/json");
     String firmwareDownloadUrl = "";
 
     int response = http.sendRequest("PUT", "0");
-    
     if (response > 0)
     {
         firmwareDownloadUrl = String(API_BASE_URL) + ":5000" + http.getString();
@@ -79,7 +127,7 @@ void update(String host, String updateUrl)
     Serial.println("Connecting to: " + String(host));
     Serial.println("URL: " + updateUrl);
     // Connect to S3
-    IPAddress address(172,20,10,4);
+    IPAddress address(172, 20, 10, 4);
     if (client.connect(address, 5000))
     {
         // Connection Succeed.
@@ -87,8 +135,8 @@ void update(String host, String updateUrl)
         Serial.println("Fetching Bin: " + String(updateUrl));
 
         // Get the contents of the bin file
-        client.print(String("GET ") + "/updates/version?version=0.01" + " HTTP/1.1\r\n" +
-                     "Host: " + "172.20.10.4" + "\r\n" +
+        client.print(String("GET ") + "/updates/version?version="+ "0.01" + " HTTP/1.1\r\n" +
+                     "Host: " + API_IP + "\r\n" +
                      "Cache-Control: no-cache\r\n" +
                      "Connection: close\r\n\r\n");
 
@@ -185,7 +233,7 @@ void update(String host, String updateUrl)
             if (client.available())
             {
                 updateBinary.write(client.read());
-                if (written % 100 == 0)
+                if (written % 1000 == 0)
                 {
                     Serial.println("Wrote: " + String(written) + " of: " + contentLength);
                 }
